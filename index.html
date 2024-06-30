@@ -351,15 +351,13 @@
                 exportCtx.save();
                 exportCtx.translate(obj.left, obj.top);
                 exportCtx.rotate(obj.angle * Math.PI / 180);
+                exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
                 if (type === '白墨') {
-                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
                     exportCtx.globalCompositeOperation = 'source-in';
                     exportCtx.fillStyle = 'white';
                     exportCtx.fillRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-                } else if (type === '图案') {
-                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
                 } else if (type === '轮廓') {
-                    drawOutline(exportCtx, obj);
+                    drawOutline(exportCtx, obj, scaledWidth, scaledHeight);
                 }
                 exportCtx.restore();
             });
@@ -367,31 +365,19 @@
             return exportCanvas.toDataURL('image/png');
         }
 
-        function drawOutline(ctx, img) {
-            const outlineCanvas = document.createElement('canvas');
-            outlineCanvas.width = img.width;
-            outlineCanvas.height = img.height;
-            const outlineCtx = outlineCanvas.getContext('2d');
-            outlineCtx.drawImage(img._element, 0, 0);
-
-            const imgData = outlineCtx.getImageData(0, 0, outlineCanvas.width, outlineCanvas.height);
-            const data = imgData.data;
-            outlineCtx.clearRect(0, 0, outlineCanvas.width, outlineCanvas.height);
-            outlineCtx.lineWidth = 5;
-            outlineCtx.strokeStyle = 'red';
-            outlineCtx.beginPath();
-
-            for (let y = 0; y < outlineCanvas.height; y++) {
-                for (let x = 0; x < outlineCanvas.width; x++) {
-                    const index = (y * outlineCanvas.width + x) * 4;
-                    if (data[index + 3] > 0) {
-                        outlineCtx.moveTo(x, y);
-                        outlineCtx.lineTo(x + 1, y);
-                    }
-                }
-            }
-            outlineCtx.stroke();
-            ctx.drawImage(outlineCanvas, img.left - img.width / 2, img.top - img.height / 2);
+        function drawOutline(ctx, obj, width, height) {
+            ctx.save();
+            ctx.translate(obj.left, obj.top);
+            ctx.rotate(obj.angle * Math.PI / 180);
+            ctx.drawImage(obj._element, -width / 2, -height / 2, width, height);
+            ctx.globalCompositeOperation = 'source-in';
+            ctx.fillStyle = 'red';
+            ctx.fillRect(-width / 2, -height / 2, width, height);
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(-width / 2, -height / 2, width, height);
+            ctx.restore();
         }
 
         function exportImages() {
@@ -415,15 +401,13 @@
                 exportCtx.save();
                 exportCtx.translate(obj.left, obj.top);
                 exportCtx.rotate(obj.angle * Math.PI / 180);
+                exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
                 if (type === '白墨') {
-                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
                     exportCtx.globalCompositeOperation = 'source-in';
                     exportCtx.fillStyle = 'white';
                     exportCtx.fillRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-                } else if (type === '图案') {
-                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
                 } else if (type === '轮廓') {
-                    drawOutline(exportCtx, obj);
+                    drawOutline(exportCtx, obj, scaledWidth, scaledHeight);
                 }
                 exportCtx.restore();
             });
