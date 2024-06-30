@@ -151,6 +151,15 @@
         #exportModal button:hover, #tutorialModal button:hover {
             background-color: #eee;
         }
+        #exportPreviews {
+            display: flex;
+            justify-content: space-between;
+        }
+        #exportPreviews img {
+            width: 32%;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
@@ -202,7 +211,11 @@
 
     <div id="exportModal">
         <h3>导出预览</h3>
-        <img id="exportPreviewImage" src="" alt="导出预览">
+        <div id="exportPreviews">
+            <img id="whiteInkPreview" src="" alt="白墨预览">
+            <img id="graphicPreview" src="" alt="图案预览">
+            <img id="contourPreview" src="" alt="轮廓预览">
+        </div>
         <button id="confirmExportButton">确认导出</button>
         <button id="cancelExportButton">取消</button>
     </div>
@@ -240,7 +253,9 @@
         const scaleYInput = document.getElementById('scaleY');
         const angleInput = document.getElementById('angle');
         const exportModal = document.getElementById('exportModal');
-        const exportPreviewImage = document.getElementById('exportPreviewImage');
+        const whiteInkPreview = document.getElementById('whiteInkPreview');
+        const graphicPreview = document.getElementById('graphicPreview');
+        const contourPreview = document.getElementById('contourPreview');
         const confirmExportButton = document.getElementById('confirmExportButton');
         const cancelExportButton = document.getElementById('cancelExportButton');
         const imageList = document.getElementById('image-list');
@@ -310,26 +325,9 @@
         exportButton.addEventListener('click', showExportPreviews);
 
         function showExportPreviews() {
-            const images = canvas.getObjects('image');
-
-            const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = canvas.originalWidth;
-            exportCanvas.height = canvas.originalHeight;
-            const exportCtx = exportCanvas.getContext('2d');
-            exportCtx.fillStyle = 'rgba(0,0,0,0)';
-            exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-
-            images.forEach(obj => {
-                const scaledWidth = obj.width * obj.scaleX;
-                const scaledHeight = obj.height * obj.scaleY;
-                exportCtx.save();
-                exportCtx.translate(obj.left + scaledWidth / 2, obj.top + scaledHeight / 2);
-                exportCtx.rotate(obj.angle * Math.PI / 180);
-                exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-                exportCtx.restore();
-            });
-
-            exportPreviewImage.src = exportCanvas.toDataURL('image/png');
+            whiteInkPreview.src = generatePreview('白墨');
+            graphicPreview.src = generatePreview('图案');
+            contourPreview.src = generatePreview('轮廓');
             exportModal.style.display = 'block';
         }
 
@@ -339,42 +337,7 @@
             exportModal.style.display = 'none';
         });
 
-        function exportImages() {
-            const images = canvas.getObjects('image');
-
-            exportLayer('白墨', images, (ctx, img) => {
-                ctx.save();
-                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
-                ctx.rotate(img.angle * Math.PI / 180);
-                ctx.drawImage(img._element, -img.width / 2, -img.height / 2, img.width, img.height);
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.fillStyle = 'white';
-                ctx.fillRect(-img.width / 2, -img.height / 2, img.width, img.height);
-                ctx.restore();
-            });
-
-            exportLayer('图案', images, (ctx, img) => {
-                ctx.save();
-                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
-                ctx.rotate(img.angle * Math.PI / 180);
-                ctx.drawImage(img._element, -img.width / 2, -img.height / 2, img.width, img.height);
-                ctx.restore();
-            });
-
-            exportLayer('轮廓', images, (ctx, img) => {
-                ctx.save();
-                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
-                ctx.rotate(img.angle * Math.PI / 180);
-                ctx.strokeStyle = 'red';
-                ctx.lineWidth = 5;
-                ctx.strokeRect(-img.width / 2, -img.height / 2, img.width, img.height);
-                ctx.restore();
-            });
-
-            exportModal.style.display = 'none';
-        }
-
-        function exportLayer(type, images, drawFunction) {
+        function generatePreview(type) {
             const exportCanvas = document.createElement('canvas');
             exportCanvas.width = canvas.originalWidth;
             exportCanvas.height = canvas.originalHeight;
@@ -382,19 +345,86 @@
             exportCtx.fillStyle = 'rgba(0,0,0,0)';
             exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
-            images.forEach(obj => {
+            canvas.getObjects().forEach(obj => {
                 const scaledWidth = obj.width * obj.scaleX;
                 const scaledHeight = obj.height * obj.scaleY;
                 exportCtx.save();
-                exportCtx.translate(obj.left + scaledWidth / 2, obj.top + scaledHeight / 2);
+                exportCtx.translate(obj.left, obj.top);
                 exportCtx.rotate(obj.angle * Math.PI / 180);
-                drawFunction(exportCtx, {
-                    left: -scaledWidth / 2,
-                    top: -scaledHeight / 2,
-                    width: scaledWidth,
-                    height: scaledHeight,
-                    _element: obj._element
-                });
+                if (type === '白墨') {
+                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                    exportCtx.globalCompositeOperation = 'source-in';
+                    exportCtx.fillStyle = 'white';
+                    exportCtx.fillRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                } else if (type === '图案') {
+                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                } else if (type === '轮廓') {
+                    drawOutline(exportCtx, obj);
+                }
+                exportCtx.restore();
+            });
+
+            return exportCanvas.toDataURL('image/png');
+        }
+
+        function drawOutline(ctx, img) {
+            const outlineCanvas = document.createElement('canvas');
+            outlineCanvas.width = img.width;
+            outlineCanvas.height = img.height;
+            const outlineCtx = outlineCanvas.getContext('2d');
+            outlineCtx.drawImage(img._element, 0, 0);
+
+            const imgData = outlineCtx.getImageData(0, 0, outlineCanvas.width, outlineCanvas.height);
+            const data = imgData.data;
+            outlineCtx.clearRect(0, 0, outlineCanvas.width, outlineCanvas.height);
+            outlineCtx.lineWidth = 5;
+            outlineCtx.strokeStyle = 'red';
+            outlineCtx.beginPath();
+
+            for (let y = 0; y < outlineCanvas.height; y++) {
+                for (let x = 0; x < outlineCanvas.width; x++) {
+                    const index = (y * outlineCanvas.width + x) * 4;
+                    if (data[index + 3] > 0) {
+                        outlineCtx.moveTo(x, y);
+                        outlineCtx.lineTo(x + 1, y);
+                    }
+                }
+            }
+            outlineCtx.stroke();
+            ctx.drawImage(outlineCanvas, img.left - img.width / 2, img.top - img.height / 2);
+        }
+
+        function exportImages() {
+            exportLayer('白墨');
+            exportLayer('图案');
+            exportLayer('轮廓');
+            exportModal.style.display = 'none';
+        }
+
+        function exportLayer(type) {
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.originalWidth;
+            exportCanvas.height = canvas.originalHeight;
+            const exportCtx = exportCanvas.getContext('2d');
+            exportCtx.fillStyle = 'rgba(0,0,0,0)';
+            exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            canvas.getObjects().forEach(obj => {
+                const scaledWidth = obj.width * obj.scaleX;
+                const scaledHeight = obj.height * obj.scaleY;
+                exportCtx.save();
+                exportCtx.translate(obj.left, obj.top);
+                exportCtx.rotate(obj.angle * Math.PI / 180);
+                if (type === '白墨') {
+                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                    exportCtx.globalCompositeOperation = 'source-in';
+                    exportCtx.fillStyle = 'white';
+                    exportCtx.fillRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                } else if (type === '图案') {
+                    exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                } else if (type === '轮廓') {
+                    drawOutline(exportCtx, obj);
+                }
                 exportCtx.restore();
             });
 
