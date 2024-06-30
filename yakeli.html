@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片编辑器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+            margin: 0;
+        }
+        #sidebar, #layers, #info-panel {
+            width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            margin: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        #canvas-container {
+            position: relative;
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            margin: 10px;
+            border-radius: 10px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+        img.preview {
+            width: 100%;
+            margin-bottom: 10px;
+            border-radius: 10px;
+        }
+        .context-menu {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            display: none;
+            z-index: 10;
+        }
+        .context-menu ul {
+            list-style: none;
+            padding: 5px 0;
+            margin: 0;
+        }
+        .context-menu ul li {
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 10px;
+        }
+        .context-menu ul li:hover {
+            background-color: #eee;
+        }
+        #ruler-horizontal, #ruler-vertical {
+            position: absolute;
+            background: repeating-linear-gradient(
+                #ccc,
+                #ccc 1px,
+                #fff 1px,
+                #fff 10px
+            );
+            z-index: 10;
+        }
+        #ruler-horizontal {
+            top: 0;
+            left: 20px; /* Offset for vertical ruler */
+            right: 0;
+            height: 20px;
+        }
+        #ruler-vertical {
+            top: 20px; /* Offset for horizontal ruler */
+            left: 0;
+            bottom: 0;
+            width: 20px;
+        }
+        .layer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            cursor: pointer;
+            border-radius: 10px;
+        }
+        .layer-item:hover {
+            background-color: #f0f0f0;
+        }
+        #exportModal, #tutorialModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            z-index: 100;
+        }
+        #exportModal h3, #tutorialModal h2 {
+            margin-top: 0;
+        }
+        #exportModal img, #tutorialModal img {
+            width: 100%;
+            border-radius: 10px;
+        }
+        #exportModal button, #tutorialModal button {
+            margin-top: 10px;
+            padding: 5px 10px;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+        #exportModal button:hover, #tutorialModal button:hover {
+            background-color: #eee;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div id="controls">
+            <input type="file" id="fileInput" multiple accept="image/*">
+            <button id="showTutorialButton">教程</button>
+        </div>
+    </div>
+    <div id="canvas-container">
+        <div id="ruler-horizontal"></div>
+        <div id="ruler-vertical"></div>
+        <canvas id="canvas"></canvas>
+    </div>
+    <div id="layers">
+        <h3>图层</h3>
+        <ul id="layerList"></ul>
+    </div>
+    <div id="info-panel">
+        <h3>元素信息</h3>
+        <div id="elementInfo"></div>
+        <div id="canvas-size-controls">
+            <h3>画布大小</h3>
+            <label for="canvasWidth">宽度 (cm):</label>
+            <input type="number" id="canvasWidth" value="25" min="1" max="25"><br>
+            <label for="canvasHeight">高度 (cm):</label>
+            <input type="number" id="canvasHeight" value="25" min="1" max="25"><br>
+            <button id="updateCanvasSize">更新画布大小</button>
+        </div>
+        <div id="transform-controls">
+            <h3>变换</h3>
+            <label for="scaleX">缩放 X:</label>
+            <input type="range" id="scaleX" step="0.1" value="1" min="0.1" max="10"><br>
+            <label for="scaleY">缩放 Y:</label>
+            <input type="range" id="scaleY" step="0.1" value="1" min="0.1" max="10"><br>
+            <label for="angle">旋转角度:</label>
+            <input type="range" id="angle" step="1" value="0" min="0" max="360"><br>
+        </div>
+        <button id="exportButton">导出图像</button>
+        <button id="deleteButton">删除选中元素</button>
+    </div>
+
+    <div id="context-menu" class="context-menu">
+        <ul>
+            <li id="delete">删除</li>
+            <li id="bringToFront">置于顶层</li>
+            <li id="sendToBack">置于底层</li>
+        </ul>
+    </div>
+
+    <div id="exportModal">
+        <h3>导出预览</h3>
+        <img id="exportPreviewImage" src="" alt="导出预览">
+        <button id="confirmExportButton">确认导出</button>
+        <button id="cancelExportButton">取消</button>
+    </div>
+
+    <div id="tutorialModal">
+        <h2>教程</h2>
+        <p>1. 点击左侧的“选择文件”按钮，上传图片。</p>
+        <p>2. 上传的图片会显示在左侧，点击图片将其添加到画布。</p>
+        <p>3. 在右侧，您可以调整画布的大小，查看和编辑选中元素的信息。</p>
+        <p>4. 右键点击画布中的元素可以显示菜单，进行删除、置顶或置底操作。</p>
+        <p>5. 点击“导出图像”按钮，将弹出预览，确认后进行导出。</p>
+        <button id="closeTutorialButton">关闭</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/fabric@4.5.1/dist/fabric.min.js"></script>
+    <script>
+        const canvas = new fabric.Canvas('canvas', {
+            backgroundColor: '#fff',
+        });
+
+        const fileInput = document.getElementById('fileInput');
+        const exportButton = document.getElementById('exportButton');
+        const deleteButton = document.getElementById('deleteButton');
+        const showTutorialButton = document.getElementById('showTutorialButton');
+        const closeTutorialButton = document.getElementById('closeTutorialButton');
+        const tutorialModal = document.getElementById('tutorialModal');
+        const sidebar = document.getElementById('sidebar');
+        const layerList = document.getElementById('layerList');
+        const contextMenu = document.getElementById('context-menu');
+        const elementInfo = document.getElementById('elementInfo');
+        const updateCanvasSizeButton = document.getElementById('updateCanvasSize');
+        const canvasWidthInput = document.getElementById('canvasWidth');
+        const canvasHeightInput = document.getElementById('canvasHeight');
+        const scaleXInput = document.getElementById('scaleX');
+        const scaleYInput = document.getElementById('scaleY');
+        const angleInput = document.getElementById('angle');
+        const exportModal = document.getElementById('exportModal');
+        const exportPreviewImage = document.getElementById('exportPreviewImage');
+        const confirmExportButton = document.getElementById('confirmExportButton');
+        const cancelExportButton = document.getElementById('cancelExportButton');
+        let currentSidebarImage = null;
+        let currentCanvasObject = null;
+
+        fileInput.addEventListener('change', handleFiles);
+
+        function handleFiles(event) {
+            const files = event.target.files;
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    addImageToSidebar(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function addImageToCanvas(src) {
+            fabric.Image.fromURL(src, function(img) {
+                img.set({
+                    left: canvas.getWidth() / 2,
+                    top: canvas.getHeight() / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    selectable: true,
+                    hasControls: true,
+                    hasBorders: true
+                });
+                img.scaleToWidth(200);
+                canvas.add(img);
+                canvas.setActiveObject(img);
+                canvas.renderAll();
+                updateLayerList();
+                updateElementInfo({ target: img });
+            });
+        }
+
+        function addImageToSidebar(src) {
+            const imgElement = document.createElement('img');
+            imgElement.src = src;
+            imgElement.style.width = '100px';
+            imgElement.style.height = '100px';
+            imgElement.style.marginBottom = '10px';
+            imgElement.style.borderRadius = '10px';
+            imgElement.draggable = true;
+            imgElement.addEventListener('dragstart', handleDragStart);
+            imgElement.addEventListener('click', () => {
+                addImageToCanvas(src);
+            });
+            imgElement.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showContextMenu(e.clientX, e.clientY, imgElement);
+            });
+            sidebar.appendChild(imgElement);
+        }
+
+        function handleDragStart(event) {
+            event.dataTransfer.setData('text/plain', event.target.src);
+        }
+
+        const canvasContainer = document.getElementById('canvas-container');
+        canvasContainer.addEventListener('dragover', (e) => e.preventDefault());
+        canvasContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const src = e.dataTransfer.getData('text/plain');
+            addImageToCanvas(src);
+        });
+
+        exportButton.addEventListener('click', showExportPreviews);
+
+        function showExportPreviews() {
+            // 获取所有图像对象
+            const images = canvas.getObjects('image');
+
+            // 显示确认按钮
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.originalWidth; // Use original width for export
+            exportCanvas.height = canvas.originalHeight; // Use original height for export
+            const exportCtx = exportCanvas.getContext('2d');
+            exportCtx.fillStyle = 'rgba(0,0,0,0)';
+            exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            images.forEach(obj => {
+                const scaledWidth = obj.width * obj.scaleX;
+                const scaledHeight = obj.height * obj.scaleY;
+                exportCtx.drawImage(obj._element, obj.left, obj.top, scaledWidth, scaledHeight);
+            });
+
+            exportPreviewImage.src = exportCanvas.toDataURL('image/png');
+            exportModal.style.display = 'block';
+        }
+
+        confirmExportButton.addEventListener('click', exportImages);
+
+        cancelExportButton.addEventListener('click', () => {
+            exportModal.style.display = 'none';
+        });
+
+        function exportImages() {
+            // 获取所有图像对象
+            const images = canvas.getObjects('image');
+
+            // 导出白墨图层
+            exportLayer('白墨', images, (ctx, img) => {
+                ctx.drawImage(img._element, img.left, img.top, img.width, img.height);
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.fillStyle = 'white';
+                ctx.fillRect(img.left, img.top, img.width, img.height);
+                ctx.globalCompositeOperation = 'source-over';
+            });
+
+            // 导出图案图层
+            exportLayer('图案', images, (ctx, img) => {
+                ctx.drawImage(img._element, img.left, img.top, img.width, img.height);
+            });
+
+            // 导出轮廓图层
+            exportLayer('轮廓', images, (ctx, img) => {
+                ctx.save();
+                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
+                ctx.rotate(img.angle * Math.PI / 180);
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 5; // 边缘宽度
+                const path = getImageOutline(img._element);
+                ctx.stroke(path);
+                ctx.restore();
+            });
+
+            exportModal.style.display = 'none';
+        }
+
+        function exportLayer(type, images, drawFunction) {
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.originalWidth; // Use original width for export
+            exportCanvas.height = canvas.originalHeight; // Use original height for export
+            const exportCtx = exportCanvas.getContext('2d');
+            exportCtx.fillStyle = 'rgba(0,0,0,0)';
+            exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            images.forEach(obj => {
+                const scaledWidth = obj.width * obj.scaleX;
+                const scaledHeight = obj.height * obj.scaleY;
+                exportCtx.save();
+                exportCtx.translate(obj.left + scaledWidth / 2, obj.top + scaledHeight / 2);
+                exportCtx.rotate(obj.angle * Math.PI / 180);
+                drawFunction(exportCtx, {
+                    left: -scaledWidth / 2,
+                    top: -scaledHeight / 2,
+                    width: scaledWidth,
+                    height: scaledHeight,
+                    _element: obj._element
+                });
+                exportCtx.restore();
+            });
+
+            const dataURL = exportCanvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `${type}.png`;
+            link.click();
+        }
+
+        function getImageOutline(image) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = image.width;
+            tempCanvas.height = image.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(image, 0, 0);
+
+            const imageData = tempCtx.getImageData(0, 0, image.width, image.height);
+            const outlinePath = new Path2D();
+            const threshold = 128;
+
+            for (let y = 0; y < imageData.height; y++) {
+                for (let x = 0; x < imageData.width; x++) {
+                    const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
+                    if (alpha > threshold) {
+                        outlinePath.rect(x, y, 1, 1);
+                    }
+                }
+            }
+
+            return outlinePath;
+        }
+
+        function showContextMenu(x, y, imgElement) {
+            currentSidebarImage = imgElement;
+            contextMenu.style.top = `${y}px`;
+            contextMenu.style.left = `${x}px`;
+            contextMenu.style.display = 'block';
+        }
+
+        canvas.on('mouse:down', function (options) {
+            if (options.e.button === 2 && options.target) {
+                showContextMenu(options.e.clientX, options.e.clientY, options.target);
+                currentCanvasObject = options.target;
+            } else if (options.target) {
+                currentCanvasObject = options.target;
+                updateElementInfo({ target: currentCanvasObject });
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        canvas.on('object:moving', updateElementInfo);
+        canvas.on('object:scaling', updateElementInfo);
+        canvas.on('object:rotating', updateElementInfo);
+
+        window.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+        });
+
+        document.getElementById('delete').addEventListener('click', () => {
+            if (currentSidebarImage) {
+                currentSidebarImage.remove();
+                currentSidebarImage = null;
+                contextMenu.style.display = 'none';
+            }
+            if (currentCanvasObject) {
+                canvas.remove(currentCanvasObject);
+                currentCanvasObject = null;
+                updateLayerList();
+                clearElementInfo();
+            }
+        });
+
+        document.getElementById('bringToFront').addEventListener('click', () => {
+            if (currentCanvasObject) {
+                currentCanvasObject.bringToFront();
+                canvas.renderAll();
+                updateLayerList();
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        document.getElementById('sendToBack').addEventListener('click', () => {
+            if (currentCanvasObject) {
+                currentCanvasObject.sendToBack();
+                canvas.renderAll();
+                updateLayerList();
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        deleteButton.addEventListener('click', () => {
+            if (currentCanvasObject) {
+                canvas.remove(currentCanvasObject);
+                currentCanvasObject = null;
+                updateLayerList();
+                clearElementInfo();
+            }
+        });
+
+        function updateElementInfo(e) {
+            const obj = e.target;
+            elementInfo.innerHTML = `
+                <p>Left: ${obj.left.toFixed(2)}</p>
+                <p>Top: ${obj.top.toFixed(2)}</p>
+                <p>Width: ${(obj.width * obj.scaleX).toFixed(2)}</p>
+                <p>Height: ${(obj.height * obj.scaleY).toFixed(2)}</p>
+                <p>Angle: ${obj.angle.toFixed(2)}</p>
+            `;
+            scaleXInput.value = obj.scaleX.toFixed(2);
+            scaleYInput.value = obj.scaleY.toFixed(2);
+            angleInput.value = obj.angle.toFixed(2);
+        }
+
+        function clearElementInfo() {
+            elementInfo.innerHTML = '';
+            scaleXInput.value = '1';
+            scaleYInput.value = '1';
+            angleInput.value = '0';
+        }
+
+        scaleXInput.addEventListener('input', () => {
+            if (currentCanvasObject) {
+                currentCanvasObject.scaleX = parseFloat(scaleXInput.value);
+                canvas.renderAll();
+                updateElementInfo({ target: currentCanvasObject });
+            }
+        });
+
+        scaleYInput.addEventListener('input', () => {
+            if (currentCanvasObject) {
+                currentCanvasObject.scaleY = parseFloat(scaleYInput.value);
+                canvas.renderAll();
+                updateElementInfo({ target: currentCanvasObject });
+            }
+        });
+
+        angleInput.addEventListener('input', () => {
+            if (currentCanvasObject) {
+                currentCanvasObject.angle = parseFloat(angleInput.value);
+                canvas.renderAll();
+                updateElementInfo({ target: currentCanvasObject });
+            }
+        });
+
+        updateCanvasSizeButton.addEventListener('click', updateCanvasSize);
+
+        function updateCanvasSize() {
+            const dpi = 300;
+            const newWidth = canvasWidthInput.value * dpi / 2.54;
+            const newHeight = canvasHeightInput.value * dpi / 2.54;
+
+            canvas.setWidth(newWidth);
+            canvas.setHeight(newHeight);
+            canvas.originalWidth = newWidth; // Save original width
+            canvas.originalHeight = newHeight; // Save original height
+            resizeCanvas();
+        }
+
+        function updateLayerList() {
+            const objects = canvas.getObjects();
+            layerList.innerHTML = '';
+            objects.forEach((obj, index) => {
+                const li = document.createElement('li');
+                li.className = 'layer-item';
+                li.textContent = `图层 ${index + 1}`;
+                li.addEventListener('click', () => {
+                    canvas.setActiveObject(obj);
+                    canvas.renderAll();
+                });
+                layerList.appendChild(li);
+            });
+        }
+
+        showTutorialButton.addEventListener('click', () => {
+            tutorialModal.style.display = 'block';
+        });
+
+        closeTutorialButton.addEventListener('click', () => {
+            tutorialModal.style.display = 'none';
+        });
+
+        // 设置初始画布尺寸
+        const dpi = 300;
+        const initialWidth = 25 * dpi / 2.54; // 转换为像素
+        const initialHeight = 25 * dpi / 2.54; // 转换为像素
+
+        canvas.setWidth(initialWidth);
+        canvas.setHeight(initialHeight);
+        canvas.originalWidth = initialWidth; // Save original width
+        canvas.originalHeight = initialHeight; // Save original height
+        resizeCanvas();
+
+        // 让画布自适应窗口大小
+        window.addEventListener('resize', resizeCanvas);
+
+        function resizeCanvas() {
+            const containerWidth = canvasContainer.clientWidth - 20; // 减去标尺宽度
+            const containerHeight = canvasContainer.clientHeight - 20; // 减去标尺高度
+            const scale = Math.min(containerWidth / canvas.originalWidth, containerHeight / canvas.originalHeight);
+            canvas.setWidth(canvas.originalWidth * scale);
+            canvas.setHeight(canvas.originalHeight * scale);
+            canvas.setZoom(scale);
+            canvas.renderAll();
+        }
+
+        function resizeCanvasToFit() {
+            const dpi = 300;
+            const containerWidth = canvasContainer.clientWidth - 20; // 减去标尺宽度
+            const containerHeight = canvasContainer.clientHeight - 20; // 减去标尺高度
+            const scale = Math.min(containerWidth / canvas.originalWidth, containerHeight / canvas.originalHeight);
+            canvas.setWidth(containerWidth);
+            canvas.setHeight(containerHeight);
+            canvas.setZoom(scale);
+            canvas.renderAll();
+        }
+
+        // 初始化时调整画布大小以适应窗口
+        resizeCanvasToFit();
+    </script>
+</body>
+</html>
