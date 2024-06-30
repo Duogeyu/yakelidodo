@@ -320,26 +320,26 @@
 
             // 导出白墨图层
             exportLayer('白墨', images, (ctx, img) => {
-                ctx.drawImage(img._element, img.left, img.top, img.width, img.height);
+                ctx.drawImage(img._element, img.left, img.top, img.width * img.scaleX, img.height * img.scaleY);
                 ctx.globalCompositeOperation = 'source-in';
                 ctx.fillStyle = 'white';
-                ctx.fillRect(img.left, img.top, img.width, img.height);
+                ctx.fillRect(img.left, img.top, img.width * img.scaleX, img.height * img.scaleY);
                 ctx.globalCompositeOperation = 'source-over';
             });
 
             // 导出图案图层
             exportLayer('图案', images, (ctx, img) => {
-                ctx.drawImage(img._element, img.left, img.top, img.width, img.height);
+                ctx.drawImage(img._element, img.left, img.top, img.width * img.scaleX, img.height * img.scaleY);
             });
 
             // 导出轮廓图层
             exportLayer('轮廓', images, (ctx, img) => {
                 ctx.save();
-                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
+                ctx.translate(img.left + img.width * img.scaleX / 2, img.top + img.height * img.scaleY / 2);
                 ctx.rotate(img.angle * Math.PI / 180);
                 ctx.strokeStyle = 'red';
                 ctx.lineWidth = 5; // 边缘宽度
-                const path = getImageOutline(img._element);
+                const path = getImageOutline(img._element, img.width * img.scaleX, img.height * img.scaleY);
                 ctx.stroke(path);
                 ctx.restore();
             });
@@ -356,16 +356,14 @@
             exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
             images.forEach(obj => {
-                const scaledWidth = obj.width * obj.scaleX;
-                const scaledHeight = obj.height * obj.scaleY;
                 exportCtx.save();
-                exportCtx.translate(obj.left + scaledWidth / 2, obj.top + scaledHeight / 2);
+                exportCtx.translate(obj.left + obj.width * obj.scaleX / 2, obj.top + obj.height * obj.scaleY / 2);
                 exportCtx.rotate(obj.angle * Math.PI / 180);
                 drawFunction(exportCtx, {
-                    left: -scaledWidth / 2,
-                    top: -scaledHeight / 2,
-                    width: scaledWidth,
-                    height: scaledHeight,
+                    left: -obj.width * obj.scaleX / 2,
+                    top: -obj.height * obj.scaleY / 2,
+                    width: obj.width * obj.scaleX,
+                    height: obj.height * obj.scaleY,
                     _element: obj._element
                 });
                 exportCtx.restore();
@@ -378,14 +376,14 @@
             link.click();
         }
 
-        function getImageOutline(image) {
+        function getImageOutline(image, scaledWidth, scaledHeight) {
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = image.width;
-            tempCanvas.height = image.height;
+            tempCanvas.width = scaledWidth;
+            tempCanvas.height = scaledHeight;
             const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(image, 0, 0);
+            tempCtx.drawImage(image, 0, 0, scaledWidth, scaledHeight);
 
-            const imageData = tempCtx.getImageData(0, 0, image.width, image.height);
+            const imageData = tempCtx.getImageData(0, 0, scaledWidth, scaledHeight);
             const outlinePath = new Path2D();
             const threshold = 128;
 
