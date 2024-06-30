@@ -3,42 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片编辑器</title>
+    <title>在线图片编辑器</title>
     <style>
         body {
             font-family: Arial, sans-serif;
+            margin: 0;
             display: flex;
             height: 100vh;
-            margin: 0;
         }
-        #sidebar, #layers, #info-panel {
-            width: 200px;
+        #sidebar {
+            width: 250px;
+            background-color: #f9f9f9;
+            border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #controls {
+            margin-bottom: 10px;
+        }
+        #controls input {
+            margin-bottom: 10px;
+        }
+        #sidebar img {
+            cursor: pointer;
             border: 1px solid #ccc;
             border-radius: 10px;
-            overflow-y: auto;
-            flex-shrink: 0;
-            margin: 10px;
-            padding: 10px;
-            background-color: #f9f9f9;
+            margin-bottom: 10px;
+            width: 100px;
+            height: 100px;
         }
         #canvas-container {
-            position: relative;
             flex-grow: 1;
             display: flex;
             justify-content: center;
             align-items: center;
+            background-color: #eee;
+            position: relative;
             overflow: hidden;
-            margin: 10px;
-            border-radius: 10px;
         }
-        canvas {
+        #canvas {
             border: 1px solid #ccc;
             border-radius: 10px;
         }
-        img.preview {
-            width: 100%;
+        #layers {
+            width: 250px;
+            background-color: #f9f9f9;
+            border-left: 1px solid #ccc;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #layers h3, #info-panel h3, #canvas-size-controls h3, #transform-controls h3 {
+            margin-top: 0;
+        }
+        #layerList {
+            list-style-type: none;
+            padding: 0;
+        }
+        #layerList li {
             margin-bottom: 10px;
+            cursor: pointer;
+            padding: 5px;
+            border: 1px solid #ccc;
             border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #layerList li:hover {
+            background-color: #eee;
+        }
+        #info-panel {
+            margin-top: 10px;
+        }
+        #info-panel p {
+            margin: 5px 0;
+        }
+        #canvas-size-controls {
+            margin-top: 10px;
+        }
+        #transform-controls {
+            margin-top: 10px;
+        }
+        #exportButton, #deleteButton, #updateCanvasSize {
+            margin-top: 10px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+        #exportButton:hover, #deleteButton:hover, #updateCanvasSize:hover {
+            background-color: #eee;
         }
         .context-menu {
             position: absolute;
@@ -61,39 +120,6 @@
         .context-menu ul li:hover {
             background-color: #eee;
         }
-        #ruler-horizontal, #ruler-vertical {
-            position: absolute;
-            background: repeating-linear-gradient(
-                #ccc,
-                #ccc 1px,
-                #fff 1px,
-                #fff 10px
-            );
-            z-index: 10;
-        }
-        #ruler-horizontal {
-            top: 0;
-            left: 20px; /* Offset for vertical ruler */
-            right: 0;
-            height: 20px;
-        }
-        #ruler-vertical {
-            top: 20px; /* Offset for horizontal ruler */
-            left: 0;
-            bottom: 0;
-            width: 20px;
-        }
-        .layer-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 0;
-            cursor: pointer;
-            border-radius: 10px;
-        }
-        .layer-item:hover {
-            background-color: #f0f0f0;
-        }
         #exportModal, #tutorialModal {
             display: none;
             position: fixed;
@@ -105,6 +131,7 @@
             border-radius: 10px;
             padding: 20px;
             z-index: 100;
+            width: 400px;
         }
         #exportModal h3, #tutorialModal h2 {
             margin-top: 0;
@@ -132,19 +159,18 @@
             <input type="file" id="fileInput" multiple accept="image/*">
             <button id="showTutorialButton">教程</button>
         </div>
+        <div id="image-list"></div>
     </div>
     <div id="canvas-container">
-        <div id="ruler-horizontal"></div>
-        <div id="ruler-vertical"></div>
         <canvas id="canvas"></canvas>
     </div>
     <div id="layers">
         <h3>图层</h3>
         <ul id="layerList"></ul>
-    </div>
-    <div id="info-panel">
-        <h3>元素信息</h3>
-        <div id="elementInfo"></div>
+        <div id="info-panel">
+            <h3>元素信息</h3>
+            <div id="elementInfo"></div>
+        </div>
         <div id="canvas-size-controls">
             <h3>画布大小</h3>
             <label for="canvasWidth">宽度 (cm):</label>
@@ -217,6 +243,7 @@
         const exportPreviewImage = document.getElementById('exportPreviewImage');
         const confirmExportButton = document.getElementById('confirmExportButton');
         const cancelExportButton = document.getElementById('cancelExportButton');
+        const imageList = document.getElementById('image-list');
         let currentSidebarImage = null;
         let currentCanvasObject = null;
 
@@ -256,10 +283,6 @@
         function addImageToSidebar(src) {
             const imgElement = document.createElement('img');
             imgElement.src = src;
-            imgElement.style.width = '100px';
-            imgElement.style.height = '100px';
-            imgElement.style.marginBottom = '10px';
-            imgElement.style.borderRadius = '10px';
             imgElement.draggable = true;
             imgElement.addEventListener('dragstart', handleDragStart);
             imgElement.addEventListener('click', () => {
@@ -269,7 +292,7 @@
                 e.preventDefault();
                 showContextMenu(e.clientX, e.clientY, imgElement);
             });
-            sidebar.appendChild(imgElement);
+            imageList.appendChild(imgElement);
         }
 
         function handleDragStart(event) {
@@ -287,13 +310,11 @@
         exportButton.addEventListener('click', showExportPreviews);
 
         function showExportPreviews() {
-            // 获取所有图像对象
             const images = canvas.getObjects('image');
 
-            // 显示确认按钮
             const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = canvas.originalWidth; // Use original width for export
-            exportCanvas.height = canvas.originalHeight; // Use original height for export
+            exportCanvas.width = canvas.originalWidth;
+            exportCanvas.height = canvas.originalHeight;
             const exportCtx = exportCanvas.getContext('2d');
             exportCtx.fillStyle = 'rgba(0,0,0,0)';
             exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
@@ -301,7 +322,11 @@
             images.forEach(obj => {
                 const scaledWidth = obj.width * obj.scaleX;
                 const scaledHeight = obj.height * obj.scaleY;
-                exportCtx.drawImage(obj._element, obj.left, obj.top, scaledWidth, scaledHeight);
+                exportCtx.save();
+                exportCtx.translate(obj.left + scaledWidth / 2, obj.top + scaledHeight / 2);
+                exportCtx.rotate(obj.angle * Math.PI / 180);
+                exportCtx.drawImage(obj._element, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+                exportCtx.restore();
             });
 
             exportPreviewImage.src = exportCanvas.toDataURL('image/png');
@@ -315,32 +340,34 @@
         });
 
         function exportImages() {
-            // 获取所有图像对象
             const images = canvas.getObjects('image');
 
-            // 导出白墨图层
             exportLayer('白墨', images, (ctx, img) => {
-                ctx.drawImage(img._element, img.left, img.top, img.width * img.scaleX, img.height * img.scaleY);
+                ctx.save();
+                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
+                ctx.rotate(img.angle * Math.PI / 180);
+                ctx.drawImage(img._element, -img.width / 2, -img.height / 2, img.width, img.height);
                 ctx.globalCompositeOperation = 'source-in';
                 ctx.fillStyle = 'white';
-                ctx.fillRect(img.left, img.top, img.width * img.scaleX, img.height * img.scaleY);
-                ctx.globalCompositeOperation = 'source-over';
+                ctx.fillRect(-img.width / 2, -img.height / 2, img.width, img.height);
+                ctx.restore();
             });
 
-            // 导出图案图层
             exportLayer('图案', images, (ctx, img) => {
-                ctx.drawImage(img._element, img.left, img.top, img.width * img.scaleX, img.height * img.scaleY);
+                ctx.save();
+                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
+                ctx.rotate(img.angle * Math.PI / 180);
+                ctx.drawImage(img._element, -img.width / 2, -img.height / 2, img.width, img.height);
+                ctx.restore();
             });
 
-            // 导出轮廓图层
             exportLayer('轮廓', images, (ctx, img) => {
                 ctx.save();
-                ctx.translate(img.left + img.width * img.scaleX / 2, img.top + img.height * img.scaleY / 2);
+                ctx.translate(img.left + img.width / 2, img.top + img.height / 2);
                 ctx.rotate(img.angle * Math.PI / 180);
                 ctx.strokeStyle = 'red';
-                ctx.lineWidth = 5; // 边缘宽度
-                const path = getImageOutline(img._element, img.width * img.scaleX, img.height * img.scaleY);
-                ctx.stroke(path);
+                ctx.lineWidth = 5;
+                ctx.strokeRect(-img.width / 2, -img.height / 2, img.width, img.height);
                 ctx.restore();
             });
 
@@ -349,21 +376,23 @@
 
         function exportLayer(type, images, drawFunction) {
             const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = canvas.originalWidth; // Use original width for export
-            exportCanvas.height = canvas.originalHeight; // Use original height for export
+            exportCanvas.width = canvas.originalWidth;
+            exportCanvas.height = canvas.originalHeight;
             const exportCtx = exportCanvas.getContext('2d');
             exportCtx.fillStyle = 'rgba(0,0,0,0)';
             exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
             images.forEach(obj => {
+                const scaledWidth = obj.width * obj.scaleX;
+                const scaledHeight = obj.height * obj.scaleY;
                 exportCtx.save();
-                exportCtx.translate(obj.left + obj.width * obj.scaleX / 2, obj.top + obj.height * obj.scaleY / 2);
+                exportCtx.translate(obj.left + scaledWidth / 2, obj.top + scaledHeight / 2);
                 exportCtx.rotate(obj.angle * Math.PI / 180);
                 drawFunction(exportCtx, {
-                    left: -obj.width * obj.scaleX / 2,
-                    top: -obj.height * obj.scaleY / 2,
-                    width: obj.width * obj.scaleX,
-                    height: obj.height * obj.scaleY,
+                    left: -scaledWidth / 2,
+                    top: -scaledHeight / 2,
+                    width: scaledWidth,
+                    height: scaledHeight,
                     _element: obj._element
                 });
                 exportCtx.restore();
@@ -374,29 +403,6 @@
             link.href = dataURL;
             link.download = `${type}.png`;
             link.click();
-        }
-
-        function getImageOutline(image, scaledWidth, scaledHeight) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = scaledWidth;
-            tempCanvas.height = scaledHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(image, 0, 0, scaledWidth, scaledHeight);
-
-            const imageData = tempCtx.getImageData(0, 0, scaledWidth, scaledHeight);
-            const outlinePath = new Path2D();
-            const threshold = 128;
-
-            for (let y = 0; y < imageData.height; y++) {
-                for (let x = 0; x < imageData.width; x++) {
-                    const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
-                    if (alpha > threshold) {
-                        outlinePath.rect(x, y, 1, 1);
-                    }
-                }
-            }
-
-            return outlinePath;
         }
 
         function showContextMenu(x, y, imgElement) {
@@ -521,8 +527,8 @@
 
             canvas.setWidth(newWidth);
             canvas.setHeight(newHeight);
-            canvas.originalWidth = newWidth; // Save original width
-            canvas.originalHeight = newHeight; // Save original height
+            canvas.originalWidth = newWidth; 
+            canvas.originalHeight = newHeight; 
             resizeCanvas();
         }
 
@@ -549,23 +555,21 @@
             tutorialModal.style.display = 'none';
         });
 
-        // 设置初始画布尺寸
         const dpi = 300;
-        const initialWidth = 25 * dpi / 2.54; // 转换为像素
-        const initialHeight = 25 * dpi / 2.54; // 转换为像素
+        const initialWidth = 25 * dpi / 2.54;
+        const initialHeight = 25 * dpi / 2.54;
 
         canvas.setWidth(initialWidth);
         canvas.setHeight(initialHeight);
-        canvas.originalWidth = initialWidth; // Save original width
-        canvas.originalHeight = initialHeight; // Save original height
+        canvas.originalWidth = initialWidth; 
+        canvas.originalHeight = initialHeight; 
         resizeCanvas();
 
-        // 让画布自适应窗口大小
         window.addEventListener('resize', resizeCanvas);
 
         function resizeCanvas() {
-            const containerWidth = canvasContainer.clientWidth - 20; // 减去标尺宽度
-            const containerHeight = canvasContainer.clientHeight - 20; // 减去标尺高度
+            const containerWidth = canvasContainer.clientWidth - 20;
+            const containerHeight = canvasContainer.clientHeight - 20;
             const scale = Math.min(containerWidth / canvas.originalWidth, containerHeight / canvas.originalHeight);
             canvas.setWidth(canvas.originalWidth * scale);
             canvas.setHeight(canvas.originalHeight * scale);
@@ -573,10 +577,12 @@
             canvas.renderAll();
         }
 
+        resizeCanvasToFit();
+
         function resizeCanvasToFit() {
             const dpi = 300;
-            const containerWidth = canvasContainer.clientWidth - 20; // 减去标尺宽度
-            const containerHeight = canvasContainer.clientHeight - 20; // 减去标尺高度
+            const containerWidth = canvasContainer.clientWidth - 20;
+            const containerHeight = canvasContainer.clientHeight - 20;
             const scale = Math.min(containerWidth / canvas.originalWidth, containerHeight / canvas.originalHeight);
             canvas.setWidth(containerWidth);
             canvas.setHeight(containerHeight);
@@ -584,7 +590,6 @@
             canvas.renderAll();
         }
 
-        // 初始化时调整画布大小以适应窗口
         resizeCanvasToFit();
     </script>
 </body>
